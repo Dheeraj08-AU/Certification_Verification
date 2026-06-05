@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GCET Certificate Verification</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+body{font-family:'Georgia',Times,serif;background:#eef2f7;padding:20px}
+.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.15);margin:15px auto;max-width:1100px; font-family:Arial, sans-serif;}
+input{width:100%;padding:10px;margin:8px 0;box-sizing:border-box;border:1px solid #ccc;border-radius:6px;}
+button{padding:10px 16px;margin:5px;background:#173f7a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:bold;transition:background 0.2s;}
+button:hover{background:#11305c}
+
+.btn-danger{background:#b91c1c;}
+.btn-danger:hover{background:#991b1b;}
+.btn-secondary{background:#64748b;}
+.btn-secondary:hover{background:#475569;}
+
+.valid{color:#15803d;font-weight:bold;background:#bbf7d0;padding:4px 12px;border-radius:12px;} 
+.invalid{color:#b91c1c;font-weight:bold;background:#fecaca;padding:4px 12px;border-radius:12px;}
+
+/* Table Styling for Registry */
+table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; text-align: left; }
+th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+th { background-color: #f8fafc; color: #334155; font-weight: bold; }
+tr:hover { background-color: #f1f5f9; }
+
+/* Enhanced Creative Certificate Styling */
+.certificate-container { position: relative; max-width: 950px; margin: 30px auto; padding: 10px; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.certificate{ background:#faf8f5; background-image: radial-gradient(#dfd7ca 1px, transparent 0), radial-gradient(#dfd7ca 1px, transparent 0); background-size: 24px 24px; background-position: 0 0, 12px 12px; border: 14px double #d4af37; padding: 50px; text-align: center; position: relative; box-sizing: border-box; overflow: hidden; }
+.logo{max-width:320px;width:100%;margin-bottom:10px;position:relative;z-index:2;}
+.cert-title {font-family:'Georgia',Times,serif; font-size:42px; font-weight:bold; color:#173f7a; margin:10px 0; letter-spacing:2px;}
+.cert-subtitle {font-size:18px; font-style:italic; color:#666; margin-bottom:25px;}
+.student{font-family:'Georgia',Times,serif; font-size:38px;font-weight:bold;margin:15px 0;color:#222;border-bottom:2px solid #d4af37;display:inline-block;padding:0 30px;}
+.cert-presentation {font-size:16px; color:#555; font-style:italic;}
+.course{font-family:Arial,sans-serif; font-size:26px;color:#173f7a;font-weight:bold;margin:15px 0;}
+.cert-meta {font-size:15px; color:#444; margin:20px 0;}
+
+.footer{display:flex;justify-content:space-between;align-items:flex-end;margin-top:50px;position:relative;z-index:2;}
+.signature-section {text-align:center; width:220px;}
+.signature-line{width:100%;border-top:2px dashed #777;margin-bottom:8px;}
+.signature-title {font-size:14px; color:#555; font-weight:bold;}
+
+.qrcode-section {text-align:right;}
+#qrcode {display:inline-block; margin-top:5px; padding:5px; background:#fff; border:1px solid #ddd;}
+.cert-id-text {font-size:12px; color:#777; font-family:monospace; margin-bottom:5px;}
+
+.corner{position:absolute;width:60px;height:60px;z-index:1;}
+.tl{top:15px;left:15px;border-top:5px solid #173f7a;border-left:5px solid #173f7a}
+.tr{top:15px;right:15px;border-top:5px solid #173f7a;border-right:5px solid #173f7a}
+.bl{bottom:15px;left:15px;border-bottom:5px solid #173f7a;border-left:5px solid #173f7a}
+.br{bottom:15px;right:15px;border-bottom:5px solid #173f7a;border-right:5px solid #173f7a}
+
+.watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:110px;color:rgba(23,63,122,0.04);font-weight:bold;white-space:nowrap;pointer-events:none;z-index:1;font-family:Arial,sans-serif;}
+.gold-seal{ position:absolute; right:70px; top:40px; width:90px; height:90px; border-radius:50%; background: linear-gradient(135deg, #ffe066 0%, #d4af37 50%, #aa8513 100%); border:3px dashed #fff; box-shadow: 0 0 0 4px #d4af37, 0 4px 10px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.5); text-align:center; line-height:1.2; transform: rotate(-15deg); z-index:2; }
+</style>
+</head>
+<body>
+
+<div class="card">
+<h1>GCET Blockchain Certificate System</h1>
+<button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+<button id="disconnectBtn" class="btn-secondary" onclick="disconnectWallet()" style="display:none;">Disconnect Session</button>
+<div id="walletStatus" style="margin-top:10px; font-weight:bold; color:#444;">Wallet Not Connected</div>
+</div>
+
+<div class="card">
+<h2>Issue Certificate <span style="font-size:14px; font-weight:normal; color:#666;">(Admin Only)</span></h2>
+<input id="studentName" placeholder="Student Name">
+<input id="courseName" placeholder="Course Name">
+<input id="issueDate" placeholder="Issue Date (e.g., June 5, 2026)">
+<input id="certificateId" placeholder="Certificate ID">
+<button onclick="issueCertificate()">Issue Certificate</button>
+</div>
+
+<div class="card">
+<h2>Revoke Certificate <span style="font-size:14px; font-weight:normal; color:#666;">(Admin Only)</span></h2>
+<input id="revokeId" placeholder="Enter Certificate ID to Revoke">
+<button class="btn-danger" onclick="revokeCertificate()">Revoke Certificate</button>
+</div>
+
+<div class="card">
+<h2>Verify Certificate <span style="font-size:14px; font-weight:normal; color:#666;">(Public)</span></h2>
+<input id="verifyId" placeholder="Certificate ID">
+<button onclick="verifyCertificate()">Verify & Generate</button>
+<button onclick="downloadPDF()">Download PDF</button>
+<div id="result"></div>
+</div>
+
+<div class="card">
+<h2>All Issued Certificates Registry</h2>
+<button onclick="loadAllCertificates()">Fetch All Certificates from Registry</button>
+<div id="allCertsTableContainer"></div>
+</div>
+
+<script>
+// Updated Contract Details
+const contractAddress = "0x8be44Ed948E13B3b0fa831256F4a30a4C9F4827E";
+const abi = [
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "certificateId",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "studentName",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "courseName",
+				"type": "string"
+			}
+		],
+		"name": "CertificateIssued",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "certificateId",
+				"type": "string"
+			}
+		],
+		"name": "CertificateRevoked",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_studentName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_courseName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_issueDate",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_certificateId",
+				"type": "string"
+			}
+		],
+		"name": "issueCertificate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_certificateId",
+				"type": "string"
+			}
+		],
+		"name": "revokeCertificate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getAllCertificates",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "studentName",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "courseName",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "issueDate",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "certificateId",
+						"type": "string"
+					},
+					{
+						"internalType": "bool",
+						"name": "isValid",
+						"type": "bool"
+					}
+				],
+				"internalType": "struct CertificateVerification.Certificate[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_certificateId",
+				"type": "string"
+			}
+		],
+		"name": "verifyCertificate",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "studentName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "courseName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "issueDate",
+				"type": "string"
+			},
+			{
+				"internalType": "bool",
+				"name": "isValid",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+let provider, signer, contract;
+
+async function connectWallet(){
+ try {
+   if (typeof window.ethereum !== 'undefined') {
+     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+     provider = new ethers.providers.Web3Provider(window.ethereum);
+     signer = provider.getSigner();
+     contract = new ethers.Contract(contractAddress, abi, signer);
+     
+     document.getElementById("walletStatus").innerHTML = "✅ Connected: " + accounts[0];
+     document.getElementById("walletStatus").style.color = "#15803d";
+     document.getElementById("connectBtn").style.display = "none";
+     document.getElementById("disconnectBtn").style.display = "inline-block";
+   } else {
+     document.getElementById("walletStatus").innerHTML = "❌ MetaMask Not Detected";
+     alert("MetaMask extension is missing.");
+   }
+ } catch(e) {
+   alert("Wallet connection failed: " + e.message);
+ }
+}
+
+function disconnectWallet() {
+  provider = null; signer = null; contract = null;
+  document.getElementById("walletStatus").innerHTML = "Wallet Session Disconnected";
+  document.getElementById("walletStatus").style.color = "#444";
+  document.getElementById("connectBtn").style.display = "inline-block";
+  document.getElementById("disconnectBtn").style.display = "none";
+  alert("Session cleared.");
+}
+
+function checkConnection() {
+    if (!contract) { alert("Please connect your wallet first!"); return false; }
+    return true;
+}
+
+async function issueCertificate(){
+ if (!checkConnection()) return;
+ const sName = document.getElementById("studentName").value;
+ const cName = document.getElementById("courseName").value;
+ const iDate = document.getElementById("issueDate").value;
+ const cId = document.getElementById("certificateId").value;
+ 
+ if(!sName || !cName || !iDate || !cId) { alert("All fields are mandatory."); return; }
+
+ try {
+   const tx = await contract.issueCertificate(sName, cName, iDate, cId);
+   await tx.wait(); 
+   alert("✅ Certificate Successfully Issued!");
+ } catch(e) { 
+   alert("Transaction failed. Only the contract owner can issue."); 
+   console.error(e); 
+ }
+}
+
+async function revokeCertificate(){
+ if (!checkConnection()) return;
+ const id = document.getElementById("revokeId").value;
+ if(!id) { alert("Please enter an ID."); return; }
+ if(!confirm("Revoke certificate permanently?")) return;
+
+ try {
+   const tx = await contract.revokeCertificate(id);
+   await tx.wait(); 
+   alert("🚨 Certificate Revoked!");
+ } catch(e) { 
+   alert("Transaction failed. Only the contract owner can revoke."); 
+   console.error(e); 
+ }
+}
+
+async function verifyCertificate(){
+ const id = document.getElementById("verifyId").value;
+ if(!id) { alert("Please enter a Certificate ID"); return; }
+ try {
+   let readContract = contract;
+   if(!contract && typeof window.ethereum !== 'undefined') {
+       const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+       readContract = new ethers.Contract(contractAddress, abi, tempProvider);
+   } else if (!contract) { alert("Connect MetaMask to read data."); return; }
+
+   const d = await readContract.verifyCertificate(id);
+   if(d.studentName === "") { alert("Certificate ID not found."); return; }
+   
+   const resultContainer = document.getElementById("result");
+   resultContainer.innerHTML = `
+   <div class="certificate-container" id="certificateArea">
+     <div class="certificate" style="border-color: ${d.isValid ? '#d4af37' : '#b91c1c'}">
+       <div class="corner tl" style="border-color: ${d.isValid ? '#173f7a' : '#b91c1c'}"></div>
+       <div class="corner tr" style="border-color: ${d.isValid ? '#173f7a' : '#b91c1c'}"></div>
+       <div class="corner bl" style="border-color: ${d.isValid ? '#173f7a' : '#b91c1c'}"></div>
+       <div class="corner br" style="border-color: ${d.isValid ? '#173f7a' : '#b91c1c'}"></div>
+       <div class="watermark">${d.isValid ? 'GCET VERIFIED' : 'REVOKED'}</div>
+       <div class="gold-seal" style="${d.isValid ? '' : 'background: linear-gradient(135deg, #f87171 0%, #b91c1c 100%); border-color: #7f1d1d; box-shadow: 0 0 0 4px #7f1d1d;'}">
+        ${d.isValid ? 'OFFICIAL<br>BLOCKCHAIN<br>SECURED' : 'INVALID<br>CERTIFICATE<br>REVOKED'}
+       </div>
+       <img class="logo" src="data:image/png;base64,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">
+       <div class="cert-title" style="color: ${d.isValid ? '#173f7a' : '#7f1d1d'}">CERTIFICATE OF ACHIEVEMENT</div>
+       <div class="cert-subtitle">Blockchain Verification Protocol Secured</div>
+       <p class="cert-presentation">This is to officially certify that the academic accomplishments of</p>
+       <div class="student" style="${d.isValid ? '' : 'text-decoration: line-through; color: #666; border-color:#b91c1c;'}">${d.studentName}</div>
+       <p class="cert-presentation">have been verified for the completion of</p>
+       <div class="course" style="color: ${d.isValid ? '#173f7a' : '#7f1d1d'}">${d.courseName}</div>
+       <div class="cert-meta">
+         <p>Execution Date: <strong style="color: ${d.isValid ? '#173f7a' : '#7f1d1d'};">${d.issueDate}</strong></p>
+         <p>Cryptographic Status: <span class="${d.isValid ? 'valid' : 'invalid'}">${d.isValid ? '● VALID ATTESTATION' : '● REVOKED / INVALID'}</span></p>
+       </div>
+       <div class="footer">
+         <div class="signature-section">
+           <div class="signature-line"></div>
+           <div class="signature-title">GCET Academic Registrar</div>
+         </div>
+         <div class="qrcode-section">
+           <div class="cert-id-text">ID: ${id}</div>
+           <div id="qrcode"></div>
+         </div>
+       </div>
+     </div>
+   </div>`;
+   
+   new QRCode(document.getElementById("qrcode"), {
+     text: id, width: 80, height: 80,
+     colorDark: d.isValid ? "#173f7a" : "#7f1d1d", colorLight: "#ffffff"
+   });
+ } catch(e) { alert("Verification call failed."); console.error(e); }
+}
+
+async function loadAllCertificates() {
+ try {
+   let readContract = contract;
+   if(!contract && typeof window.ethereum !== 'undefined') {
+       const tempProvider = new ethers.providers.Web3Provider(window.ethereum);
+       readContract = new ethers.Contract(contractAddress, abi, tempProvider);
+   } else if (!contract) {
+       alert("Please connect MetaMask to fetch contract data.");
+       return;
+   }
+
+   const container = document.getElementById("allCertsTableContainer");
+   container.innerHTML = "<em>Loading data from blockchain registry...</em>";
+
+   const list = await readContract.getAllCertificates();
+
+   if(list.length === 0) {
+       container.innerHTML = "<p>No certificates have been issued yet.</p>";
+       return;
+   }
+
+   let tableHtml = `
+   <table>
+     <thead>
+       <tr>
+         <th>Certificate ID</th>
+         <th>Student Name</th>
+         <th>Course Name</th>
+         <th>Issue Date</th>
+         <th>Status</th>
+       </tr>
+     </thead>
+     <tbody>
+   `;
+
+   for (let i = 0; i < list.length; i++) {
+       const cert = list[i];
+       const statusBadge = cert.isValid 
+           ? `<span class="valid" style="font-size:11px; padding:2px 8px;">VALID</span>` 
+           : `<span class="invalid" style="font-size:11px; padding:2px 8px;">REVOKED</span>`;
+       
+       tableHtml += `
+       <tr>
+         <td style="font-family:monospace; font-weight:bold;">${cert.certificateId}</td>
+         <td>${cert.studentName}</td>
+         <td>${cert.courseName}</td>
+         <td>${cert.issueDate}</td>
+         <td>${statusBadge}</td>
+       </tr>
+       `;
+   }
+
+   tableHtml += `</tbody></table>`;
+   container.innerHTML = tableHtml;
+
+ } catch (e) {
+   alert("Failed to load certificates registry.");
+   console.error(e);
+ }
+}
+
+async function downloadPDF(){
+ const el = document.getElementById("certificateArea");
+ if(!el) { alert("Please verify a certificate first."); return; }
+ try {
+   const canvas = await html2canvas(el, {scale: 2}); 
+   const img = canvas.toDataURL("image/png");
+   const {jsPDF} = window.jspdf;
+   const pdf = new jsPDF("landscape","mm","a4");
+   pdf.addImage(img,"PNG",10,10,277,190);
+   pdf.save(`GCET_Certificate_${document.getElementById("verifyId").value}.pdf`);
+ } catch(e) { alert("PDF generation failed."); console.error(e); }
+}
+</script>
+</body>
+</html>
